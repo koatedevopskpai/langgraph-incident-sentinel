@@ -55,12 +55,14 @@ graph TD;
 ```bash
 docker compose up -d
 uv sync --extra dev
-cp .env.example .env  # Add your OPENAI_API_KEY
+cp .env.example .env  # then set OPENAI_API_KEY and POSTGRES_PASSWORD
 ```
 
 `uv` reads `.python-version` (3.12) and installs the locked dependency set from `uv.lock` into `.venv`, so every machine resolves identically. Prefer pip? `pip install -e ".[dev]"` still works.
 
-> **Port note:** the container publishes on **5433** so it never collides with a local PostgreSQL on `5432`. `DATABASE_URL` in `.env.example` already matches; change both together if you use a different port.
+The Postgres password is never committed: `docker compose` reads `POSTGRES_PASSWORD` from your untracked `.env`, and `src/config.py` assembles the checkpoint DSN from the same `POSTGRES_*` variables. Set `DATABASE_URL` only to point somewhere else entirely.
+
+> **Port note:** the container publishes on **5433** so it never collides with a local PostgreSQL on `5432`. Override with `POSTGRES_PORT` if needed.
 
 ### 2. CLI Mode: Run an Incident & Test Crash Recovery
 ```bash
@@ -110,24 +112,10 @@ The test suites in `tests/` swap `AsyncPostgresSaver` for LangGraph's in-memory 
 uv run pytest -v
 ```
 
-### Note on GitHub Actions CI/CD
-Automated GitHub Actions workflows (`.github/workflows/ci.yml`) are omitted to keep this repository a self-contained local sandbox without external runner dependencies. In a **production deployment**, enforce graph determinism on every pull request using the following workflow:
+### Continuous Integration
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request. It syncs the locked dependency set with `uv` and executes the offline suite. Because the tests substitute `MemorySaver` and mock structured outputs, CI needs **no PostgreSQL service and no API key** — the same suite that runs locally in seconds runs unchanged on a runner.
 
-```yaml
-# Recommended Production Workflow (.github/workflows/ci.yml)
-name: Graph Determinism CI
-on: [push, pull_request]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: "3.12"
-      - run: uv sync --extra dev
-      - run: uv run pytest -v
-```
+A second job runs `uv lock --check`, so a dependency edit that forgets to re-lock fails the build instead of drifting silently.
 
 ---
 
@@ -137,6 +125,8 @@ jobs:
 langgraph-incident-sentinel/
 ├── .env.example
 ├── .gitattributes             # LF line-ending normalization for cross-platform checkouts
+├── .github/
+│   └── workflows/ci.yml       # CI: locked deps, offline async suite, lockfile drift check
 ├── .gitignore
 ├── .python-version            # Dev interpreter pin (3.12) for uv / pyenv / mise
 ├── docker-compose.yaml        # Local PostgreSQL 16 instance for checkpoint persistence

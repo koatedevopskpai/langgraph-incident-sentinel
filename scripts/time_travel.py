@@ -9,14 +9,13 @@ load_dotenv()
 from src.config import get_database_url
 from src.graph import build_graph
 
-DB_URI = get_database_url()
-
 
 async def main():
     thread_id = sys.argv[1] if len(sys.argv) > 1 else "incident-101"
     config = {"configurable": {"thread_id": thread_id}}
+    db_uri = get_database_url()
 
-    async with AsyncPostgresSaver.from_conn_string(DB_URI) as checkpointer:
+    async with AsyncPostgresSaver.from_conn_string(db_uri) as checkpointer:
         graph = build_graph(checkpointer)
 
         print(f"=== CHECKPOINT HISTORY FOR {thread_id} ===")

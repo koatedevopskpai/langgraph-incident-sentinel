@@ -3,12 +3,13 @@ services:
     image: postgres:16-alpine
     container_name: sentinel_postgres
     environment:
-      POSTGRES_USER: sentinel
-      POSTGRES_PASSWORD: sentinel_password
-      POSTGRES_DB: langgraph_checkpoints
+      POSTGRES_USER: ${POSTGRES_USER:-sentinel}
+      # Required: set POSTGRES_PASSWORD in .env (see .env.example)
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-langgraph_checkpoints}
     ports:
       # Published on 5433 to avoid colliding with a local PostgreSQL install on 5432
-      - "5433:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 

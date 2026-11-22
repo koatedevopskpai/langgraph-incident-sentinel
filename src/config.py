@@ -1,19 +1,40 @@
 import os
 from functools import lru_cache
+from urllib.parse import quote
 
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
 load_dotenv()
 
-DEFAULT_DATABASE_URL = (
-    "postgresql://sentinel:sentinel_password@localhost:5433/langgraph_checkpoints"
-)
-
 
 def get_database_url() -> str:
-    """Resolve the checkpointer DSN, falling back to the local docker-compose instance."""
-    return os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+    """
+    Resolve the checkpointer DSN.
+
+    ``DATABASE_URL`` wins when present. Otherwise the DSN is assembled from the
+    ``POSTGRES_*`` variables so the password only ever lives in an untracked ``.env``
+    file (shared with docker-compose) rather than in committed YAML.
+    """
+    explicit = os.getenv("DATABASE_URL")
+    if explicit:
+        return explicit
+
+    password = os.getenv("POSTGRES_PASSWORD")
+    if not password:
+        raise RuntimeError(
+            "POSTGRES_PASSWORD is not set. Copy .env.example to .env and choose a "
+            "password, or set DATABASE_URL explicitly."
+        )
+
+    user = os.getenv("POSTGRES_USER", "sentinel")
+    host = os.getenv("POSTGRES_HOST", "localhost")
+    port = os.getenv("POSTGRES_PORT", "5433")
+    database = os.getenv("POSTGRES_DB", "langgraph_checkpoints")
+    return (
+        f"postgresql://{quote(user, safe='')}:{quote(password, safe='')}"
+        f"@{host}:{port}/{database}"
+    )
 
 
 @lru_cache(maxsize=1)
